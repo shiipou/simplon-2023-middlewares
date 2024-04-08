@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+</head>
+<body>
+  <form action="login" method="post">
+    <input type="text" name="username" id="username"/>
+    <input type="password" name="password" id="password"/>
+    <input type="submit" value="Login">
+  </form>
+  <script>
+    window.addEventListener('load', async () => {
+      const form = document.querySelector('form')
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const {username, password} = Object.fromEntries(new FormData(form))
+        const token = await fetch(e.target.action, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            username,
+            password
+          })
+        })
+        .then((response) => response.json())
+        .then((data) => data.token)
+        .catch(e=> console.error(e))
+        console.log('Token:', token)
+        sessionStorage.setItem('token', token)
+        document.location.href = 'profile.html'
+      })
+    })
+  </script>
+</body>
+</html>
