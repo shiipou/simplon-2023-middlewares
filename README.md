@@ -26,6 +26,250 @@ Dans ce middleware, nous avons simplement affiché une ligne de log nommée "Acc
 
 Imaginez donc un portique d'aéroport qui va filtrer les personnes avec billets, les envoyer vers une nouvelle porte en cas de changements de dernière minute, vérifier leurs bagages, mais aussi modifier le contenu de ces bagages si nécessaire (par exemple, retirer un couteau d'un sac de cabine). De la même manière, lorsqu'une requête arrive sur une API, il faut pouvoir filtrer les requêtes authentifiées avec les bons droits d'accès, vérifier le contenu (JSON valide, headers présents, etc.), mais aussi modifier le contenu d'une requête (corps, en-têtes, etc.) pour des cas spécifiques à votre application. Par exemple, vous pourriez vouloir normaliser les entrées pour que toutes les dates soient au format `yyyy/mm/dd`, de sorte que même si un utilisateur entre `30/04/2024`, vous obteniez `2024/04/30` pour éviter de dupliquer la logique de validation des entrées sur toutes vos routes.
 
+## Le Modèle MVC
+
+Le modèle MVC est important pour une base de code propre et bien structuré. Ce n'est pas la seule manière de faire, mais c'est une méthode testé et approuvé au fils des années qui n'a pas vielli.
+
+Le principe est simple, découper votre code en différentes catégories de fichiers :
+- Le **modèle** dans des classes représentant vos données.
+- Les **vues** dans des fichiers permettant de générer une page a partir des données.
+- Les **controlleurs** dans des fichiers permettant de faire transiter les données vers les vues et vice et versa.
+
+Pour commencer on va simplement préparer la connexion a la base de donnée avec un fichier `db.js` qu'on pourra placer dans un dossier `services/`.
+
+Il encapsulera la configuration de la connexion à la base de données PostgreSQL à l'aide de la bibliothèque `pg` :
+
+```js
+// services/db.js
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  user: process.env.PG_USER ?? 'postgres',
+  host: process.env.PG_HOST ?? 'localhost',
+  database: process.env.PG_DATABASE ?? 'postgres',
+  password: process.env.PG_PASSWORD ?? 'postgres',
+  port: process.env.PG_PORT ?? 5432
+})
+
+export default pool
+```
+
+### Classe Utilisateur (Modèle)
+
+Créer une classe de donnée User pour importer la connexion à la base de données depuis votre `db.js` et ainsi l'utiliser pour les opérations sur la base de données :
+
+```js
+// models/User.js
+import db from '../db.js'
+
+export default class User {
+  constructor(username, email, password) {
+    this.username = username
+    this.email = email
+    this.password = password
+  }
+
+  async save() {
+    const client = await db.connect()
+    try {
+      const queryText = 'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING *';
+      const values = [this.username, this.email, this.password]
+      const result = await client.query(queryText, values)
+      return result.rows[0]
+    } finally {
+      client.release()
+    }
+  }
+
+  static async findById(userId) {
+    const client = await db.connect()
+    try {
+      const queryText = 'SELECT * FROM users WHERE id = $1'
+      const values = [userId]
+      const result = await client.query(queryText, values)
+      return result.rows[0]
+    } finally {
+      client.release()
+    }
+  }
+}
+```
+
+### Contrôleur Utilisateur
+
+Créer un contrôleur pour utiliser la classe User. Il permettra de faire le lien entre la votre routeur et votre modèle de donnée.
+
+```js
+// controllers/userController.js
+import User from '../models/User.js'
+
+export async function getUserById(req, res, next) {
+  const userId = req.params.id
+  const user = await User.findById(userId).catch(error => {
+    next(error)
+  })
+  if(user){
+    res.json(user)
+  }
+}
+
+export async function createUser(req, res, next) {
+  const { username, email, password } = req.body
+  const newUser = new User(username, email, password)
+  const savedUser = await newUser.save().catch(error => {
+    next(error)
+  })
+  if(user){
+    res.status(201).json(savedUser)
+  }
+}
+```
+
+### Routeur Utilisateur
+
+Créer un routeur pour gérer vos routes utilisateurs et les liés a vos controlleurs.
+
+```js
+// routes/userRoutes.js
+import express from 'express'
+import { getUserByIdController, createUserController } from '../controllers/userController.js'
+
+const router = express.Router()
+
+router.get('/users/:id', getUserByIdController)
+router.post('/users', createUserController)
+
+export default router
+```
+
+Maintenant que vous avez votre routeur, vous devez penser a l'ajouter dans le point d'entrée de votre application (`main.js`)
+
+Vous devrez donc le modifier pour obtenir quelque-chose comme ça :
+
+```js
+// main.js
+import express from 'express'
+
+import userRoutes from './routes/userRoutes.js'
+
+const app = express();
+const HOST = process.env.HOST ?? 'localhost'
+const PORT = process.env.PORT || 3000
+
+/*** Middleware ***/
+
+// Middleware for JSON body parsing
+app.use(express.json())
+// Middleware to read FormData (accessible in `req.body`)
+app.use(express.urlencoded({extended: true}))
+
+/*** Routeurs ***/
+
+// Routes users
+app.use(userRoutes)
+
+/*** Initialisation ***/
+
+// Serveur express.js
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running on http://${HOST}:${PORT}`)
+});
+```
+
+## Formulaire et traitement des données.
+
+Pour permettre de récolter les données d'un formulaire, il faudra d'abord permettre a l'utilisateurs d'accéder au-dit formulaire.
+
+Pour ce faire, il suffira d'ajouter le middleware `express.static` et d'exposer le dossier `public` qui contiendra la page HTML de votre formulaire.
+
+```js
+app.use(express.static('public'))
+```
+
+Dans le fichier `/public/login.html` vous pourrez alors ajouter votre formulaire :
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Login</title>
+</head>
+<body>
+  <form action="login" method="post">
+    <input type="text" name="username" id="username" required/>
+    <input type="password" name="password" id="password" required/>
+    <input type="submit" value="Login">
+  </form>
+</body>
+</html>
+```
+
+Votre express.js doit être capable d'en décoder les données du fomulaire. Il faudra donc un second middleware qui effectuera cette action pour nous :
+
+```js
+app.use(express.urlencoded({extended: true}))
+```
+
+Ce middleware permet de décoder les données sous la forme `www-urlencoded` et d'y accéder dans le `req.body` de vos routes.
+
+Maintenant que nous avons accès aux données du fomulaire vous allez devoir créer une nouvelle route permettant de recevoir ces données. je le ferais dans le fichier `routes/userRoutes.js` et `controllers/userController.js`:
+
+```js
+import { userLogin } from '../controllers/userController.js'
+// Route pour gérer la soumission du formulaire de connexion
+router.post('/login', userLogin)
+```
+
+```js
+export function userLogin(req, res) {
+  const { username, password } = req.body
+
+  if (username === 'admin' && password === 'simplon2024') {
+    res.send('Connexion réussie !')
+  } else {
+    res.status(401).send('Échec de la connexion. Veuillez vérifier vos identifiants.')
+  }
+}
+```
+
+Maintenant recevoir le message `Connexion réussie !` n'est pas très utile dans un retour d'API.
+
+Nous pouvons maintenant modifier notre route pour récupérer via notre modèle l'id de l'utilisateur correspondant.
+
+```js
+// controllers/userController.js
+import User from '../models/User.js'
+
+export function userLogin(req, res) {
+  const { username, password } = req.body
+  const user = User.findByUsernameAndPassword(username, password)
+  if (user) {
+    res.json({
+      id: user.id,
+      username: user.username
+    })
+  } else {
+    res.status(401).send('Échec de la connexion. Veuillez vérifier vos identifiants.')
+  }
+}
+```
+
+Ajoutez cette méthode statique dans la class `User` permettant de récupérer l'utilisateur correspondant aux credentials donnés :
+```js
+// models/User.js
+static async findByUsernameAndPassword(username, password) {
+  const client = await db.connect()
+  try {
+    const queryText = 'SELECT * FROM users WHERE username = $1 and password = $2'
+    const values = [username, password]
+    const result = await client.query(queryText, values)
+    return result.rows[0]
+  } finally {
+    client.release()
+  }
+}
+```
+
 ## Authentification
 
 ### Sessions
@@ -45,8 +289,8 @@ Voici comment mettre en place les sessions avec `express-session` :
    Dans votre fichier principal (habituellement `app.js` ou `index.js`), configurez `express-session` :
 
    ```js
-   import express from 'express';
-   import session from 'express-session';
+   const express = require('express');
+   const session = require('express-session');
 
    const app = express();
 
@@ -65,7 +309,7 @@ Voici comment mettre en place les sessions avec `express-session` :
    ```js
    app.get('/login', (req, res) => {
      // Simulated authentication
-	  const user = { id: 1, username: 'john_doe' };
+	 const user = { id: 1, username: 'john_doe' };
      req.session.user = user;
      res.send('Logged in successfully!');
    });
@@ -107,7 +351,7 @@ Un JWT (JSON Web Token) est un format ouvert qui permet de représenter des asse
 Pour créer un JWT, vous pouvez utiliser une bibliothèque comme `jsonwebtoken` en Node.js. Voici un exemple de création d'un JWT :
 
 ```js
-import jwt from 'jsonwebtoken';
+const jwt = require('jsonwebtoken');
 
 const payload = { user_id: user.id, email: user.email };
 const secretKey = 'your_secret_key';
