@@ -45,8 +45,8 @@ Voici comment mettre en place les sessions avec `express-session` :
    Dans votre fichier principal (habituellement `app.js` ou `index.js`), configurez `express-session` :
 
    ```js
-   const express = require('express');
-   const session = require('express-session');
+   import express from 'express';
+   import session from 'express-session';
 
    const app = express();
 
@@ -65,7 +65,7 @@ Voici comment mettre en place les sessions avec `express-session` :
    ```js
    app.get('/login', (req, res) => {
      // Simulated authentication
-	 const user = { id: 1, username: 'john_doe' };
+	  const user = { id: 1, username: 'john_doe' };
      req.session.user = user;
      res.send('Logged in successfully!');
    });
@@ -107,7 +107,7 @@ Un JWT (JSON Web Token) est un format ouvert qui permet de représenter des asse
 Pour créer un JWT, vous pouvez utiliser une bibliothèque comme `jsonwebtoken` en Node.js. Voici un exemple de création d'un JWT :
 
 ```js
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 const payload = { user_id: user.id, email: user.email };
 const secretKey = 'your_secret_key';
