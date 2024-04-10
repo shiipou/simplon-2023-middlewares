@@ -41,9 +41,9 @@ Il encapsulera la configuration de la connexion à la base de données PostgreSQ
 
 ```js
 // services/db.js
-import { Pool } from 'pg'
+import pg from 'pg'
 
-const pool = new Pool({
+const pool = new pg.Pool({
   user: process.env.PG_USER ?? 'postgres',
   host: process.env.PG_HOST ?? 'localhost',
   database: process.env.PG_DATABASE ?? 'postgres',
