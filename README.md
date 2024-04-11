@@ -360,10 +360,10 @@ const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
 
 #### Et dans express.js ?
 
-Vous pouvez combiner JWT avec les sessions pour améliorer la sécurité et la gestion des utilisateurs dans votre application Express. Voici comment vous pourriez intégrer JWT dans une configuration de session :
+Vous pouvez utiliser le JWT pour améliorer la sécurité et la gestion des utilisateurs dans votre application Express en encodant les informations nécessaire a identifier votre utilisateur dans ce token. Voici comment vous pourriez intégrer JWT dans une configuration express.js :
 
 1. **Générer un JWT lors de l'authentification** :
-   Lorsque l'utilisateur se connecte avec succès, générez un JWT et stockez-le dans la session :
+   Lorsque l'utilisateur se connecte avec succès, générez un JWT que vous lui renvoyez en réponse, ce token pourra donc servire dans les requêtes suivante par ce client :
 
    ```js
    const jwt = require('jsonwebtoken');
@@ -372,8 +372,7 @@ Vous pouvez combiner JWT avec les sessions pour améliorer la sécurité et la g
      // Authenticate user...
      const userId = 123;
      const token = jwt.sign({ userId }, 'your_secret_key', { expiresIn: '1h' });
-     req.session.token = token;
-     res.send('Logged in successfully!');
+     res.json({ token });
    });
    ```
 
@@ -381,23 +380,27 @@ Vous pouvez combiner JWT avec les sessions pour améliorer la sécurité et la g
    Dans les routes nécessitant une authentification, vérifiez et décodez le JWT pour obtenir l'identifiant de l'utilisateur :
 
    ```js
-   const verifyToken = (req, res, next) => {
-     const token = req.session.token;
+   function requireToken(req, res, next) {
+     // Si le header d'authentification contient le mot Bearer on le retire, sinon on prends la totalité du header
+     // Pour faire ça, j'ai utilisé une Regex simple qui vérifie caractères par caractères l'égalité de manière insensible a la case grâce a l'option `i`.
+     const token = req.headers.authorization?.replace(/bearer /i, '')
+     
      if (!token) return res.status(401).send('Unauthorized');
 
      jwt.verify(token, 'your_secret_key', (err, decoded) => {
        if (err) return res.status(401).send('Unauthorized');
-       req.user = decoded;
+       req.userId = decoded.id;
        next();
      });
    };
 
-   app.get('/profile', verifyToken, (req, res) => {
-     res.json({ username: req.user.username });
-   });
+   app.get('/profile', requireToken, (req, res) => {
+     const user = User.findById(req.userId)
+     res.json({ username: req.userId.username })
+   })
    ```
 
-   Le middleware `verifyToken` vérifie la validité du JWT stocké dans la session. Si le JWT est valide, l'utilisateur est extrait et disponible dans `req.user`.
+   Le middleware `requireToken` vérifie la validité du JWT stocké dans la session. Si le JWT est valide, l'utilisateur est extrait et disponible dans `req.user`, sinon la route est innacessible grace au "Guards" middleware.
 
    Dans cet exemple :
 
