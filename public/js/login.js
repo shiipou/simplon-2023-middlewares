@@ -3,7 +3,7 @@ window.addEventListener('load', () => {
     const errorSpan = document.querySelector('span.form-error')
     formEl.addEventListener('submit', async (event) => {
         event.preventDefault()
-        const { username, password } = Object.fromEntries(new FormData(formEl))
+        const formdata = Object.fromEntries(new FormData(formEl))
 
         const user = await fetch(formEl.action, {
             method: formEl.method,
@@ -11,10 +11,7 @@ window.addEventListener('load', () => {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                username: username,
-                password: password
-            })
+            body: JSON.stringify(formdata)
         })
             .then(async response => {
                 if(response.ok) {

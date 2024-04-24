@@ -1,4 +1,4 @@
-import { User } from "../models/User.js"
+import User from "../models/User.js"
 import { verifyUserToken } from "../services/jwt.js"
 
 /**
@@ -9,13 +9,13 @@ import { verifyUserToken } from "../services/jwt.js"
  */
 export async function requireAuthToken(req, res, next) {
     const token = req.headers.authorization
-    const userPayload = await verifyUserToken(token).catch(error=>{
+    const userPayload = await verifyUserToken(token).catch(error => {
         res.status(403).json({error: true, message: 'Forbidden access'})
     })
 
     if(userPayload){
         console.log('UserPayload', userPayload)
-        req.user = User.findById(userPayload.id)
+        req.user = await User.findById(userPayload.id)
         next()
     }
 }
